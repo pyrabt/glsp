@@ -1,0 +1,85 @@
+name: glsp 
+version: "0.2"
+author: Will M. <u0922010@utah.edu>
+about: GLSP is a language-aware project search application for RustLang.
+args:
+    - struct:
+        short: s
+        long: Struct 
+        help: Find occurence of regex in project as a struct
+        multiple: true
+    - class:
+        short: c
+        long: Class 
+        help: Find occurence of regex in project as a class
+        multiple: true
+    - module:
+        short: M
+        long: Module
+        help: Find occurence of regex in project as a module
+        multiple: true
+    - method:
+        short: m
+        long: Method
+        help: Find occurence of regex in project as a method
+        multiple: true
+    - property:
+        short: p
+        long:  Property
+        help: Find occurence of regex in project as a property
+        multiple: true
+    - enum:
+        short: e
+        long: Enum
+        help: Find occurence of regex in project as an enum
+        multiple: true
+    - function:
+        short: u
+        long: Function
+        help: Find occurence of regex in project as a function
+        multiple: true
+    - variable:
+        short: v
+        long: Variable 
+        help: Find occurence of regex in project as a variable 
+        multiple: true
+    - number:
+        short: n
+        long: Number
+        help: Find occurence of regex in project as a number
+        multiple: true
+    - constant:
+        short: t
+        long: Constant
+        help: Find occurence of regex in project as a constant 
+        multiple: true
+    - boolean:
+        short: b
+        long: Boolean
+        help: Find occurence of regex in project as a boolean
+        multiple: true
+    - array:
+        short: y
+        long: Array
+        help: Find occurence of regex in project as an array
+        multiple: true
+    - object:
+        short: o
+        long: Object
+        help: Find occurence of regex in project as an object 
+        multiple: true
+    - regex:
+        help: The regex symbol to search for in the project
+        required: true
+        index: 1
+    - all:
+        help: Finds every occurence of this regex symbol in the project
+        short: a
+        long: all
+        multiple: true
+    - file:
+        help: Search for regex symbol in given file
+        short: f
+        long: file
+        takes_value: true
+        value_name: FILE 

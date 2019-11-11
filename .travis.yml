@@ -1,0 +1,15 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+jobs:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+cache: cargo
+script:
+  - rustup update
+  - rustup component add rls rust-analysis rust-src
+  - cargo build --verbose --all
+  - cargo test --verbose --all
