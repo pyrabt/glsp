@@ -15,17 +15,17 @@ On top of these two approaches, I will also need to test whether parsing and gen
 ## Milestones
 
 **Starting Out**
-[x] Build proficiency in Rustlang through reading documentation and doing some small projects.
-[x] Working communication over JSON-RPC between the command line application and the language server.
+- [x] Build proficiency in Rustlang through reading documentation and doing some small projects.
+- [x] Working communication over JSON-RPC between the command line application and the language server.
 
 **Single Language Support**
-[x] Simple single document searches matching class names using the command line app.
-[x] Expanded search capabilities within a single document using the application.
-[x] Multi-Document search within a single directory on a single pattern (like class name) using the command line app.
-[ ] Multi-Document search (single dir) on all viable patterns using the cli app.
-[ ] Multi-Document search on all files within root and nested directories.
+- [x] Simple single document searches matching class names using the command line app.
+- [x] Expanded search capabilities within a single document using the application.
+- [x] Multi-Document search within a single directory on a single pattern (like class name) using the command line app.
+- [ ] Multi-Document search (single dir) on all viable patterns using the cli app.
+- [ ] Multi-Document search on all files within root and nested directories.
 
 **Multi-Language Support**
-[ ] Exand support to one additional language
-[ ] Expand support to at least 5 languages total
-[ ] Expand support to include up to 5 more languages
+- [ ] Exand support to one additional language
+- [ ] Expand support to at least 5 languages total
+- [ ] Expand support to include up to 5 more languages
