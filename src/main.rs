@@ -253,6 +253,11 @@ mod main_tests {
   use super::*;
 
   #[test]
+  fn run_server_returns_child_process() {
+    assert!(!run_server().is_err());
+  }
+
+  #[test]
   fn get_symbol_type_returns_unknown() {
     assert_eq!("Unknown", get_symbol_type(99));
   }
