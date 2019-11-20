@@ -245,32 +245,11 @@ impl SymbolRequest {
     fn new(symbol_name: &str) -> SymbolRequest {
         SymbolRequest {
             json_message: object! {
-                "id" => 4,
+                "id" => 10,
                 "jsonrpc" => 2.0,
                 "method" => "workspace/symbol",
                 "params" => object!{
                   "query" => symbol_name
-                }
-            },
-        }
-    }
-}
-
-struct DocSymbolRequest {
-  json_message: JsonValue,
-}
-
-impl DocSymbolRequest {
-    fn new(file_name: String) -> SymbolRequest {
-        SymbolRequest {
-            json_message: object! {
-                "id" => 4,
-                "jsonrpc" => 2.0,
-                "method" => "textDocument/documentSymbol",
-                "params" => object!{
-                  "textDocument" => object!{
-                    "uri" => file_name
-                  } 
                 }
             },
         }
@@ -324,8 +303,4 @@ pub fn init_notification() -> String {
 
 pub fn symbol_request(symbol_name: &str) -> String {
     get_formatted_message_str(&SymbolRequest::new(symbol_name).json_message)
-}
-
-pub fn doc_symbol_request(file_uri: String) -> String {
-  get_formatted_message_str(&DocSymbolRequest::new(file_uri).json_message)
 }
