@@ -24,72 +24,7 @@ fn run_server() -> Result<std::process::Child, io::Error> {
     Ok(instance)
 }
 
-fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
-    // Read in the "Content-Length: xx" part.
-    let mut size: Option<usize> = None;
-    loop {
-        let mut buffer = String::new();
-        input.read_line(&mut buffer)?;
 
-        // End of input.
-        if buffer.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "EOF encountered in the middle of reading LSP headers",
-            ));
-        }
-
-        // Header section is finished, break from the loop.
-        if buffer == "\r\n" {
-            break;
-        }
-
-        let res: Vec<&str> = buffer.split(' ').collect();
-
-        // Make sure header is valid.
-        if res.len() != 2 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Header '{}' is malformed", buffer),
-            ));
-        }
-        let header_name = res[0].to_lowercase();
-        let header_value = res[1].trim();
-
-        match header_name.as_ref() {
-            "content-length:" => {
-                size = Some(usize::from_str_radix(header_value, 10).map_err(|_e| {
-                    io::Error::new(io::ErrorKind::InvalidData, "Couldn't read size")
-                })?);
-            }
-            "content-type:" => {
-                if header_value != "utf8" && header_value != "utf-8" {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Content type '{}' is invalid", header_value),
-                    ));
-                }
-            }
-            // Ignore unknown headers (specification doesn't say what to do in this case).
-            _ => (),
-        }
-    }
-    let size = match size {
-        Some(size) => size,
-        None => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Message is missing 'content-length' header",
-            ));
-        }
-    };
-    //println!("reading: {:?} bytes", size);
-
-    let mut content = vec![0; size];
-    input.read_exact(&mut content)?;
-
-    String::from_utf8(content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-}
 
 // use enum for flags instead?
 fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
@@ -141,16 +76,16 @@ fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
     return flags;
 }
 
-// TODO: make this method return a Resutl<,> 
-fn get_symbol_req_response(reader: &mut BufReader<std::process::ChildStdout>) -> json::JsonValue {
+fn get_symbol_req_response(reader: &mut BufReader<std::process::ChildStdout>, id: u32) -> json::JsonValue {
   let mut res: String;
+  let check_str = format!("\"id\":{}", id); 
     loop {
-        let y = match read_message(reader) {
+        let y = match lsp_message::read_message(reader) {
             Ok(message) => Some(message),
             Err(_err) => None,
         };
         res = y.unwrap();
-        if res.contains("\"id\":10") {
+        if res.contains(&check_str) {
             break;
         }
     }
@@ -189,7 +124,7 @@ fn main() {
 
     let mut lock = BufReader::new(rls_stdout.take().unwrap());
 
-    let _x = match read_message(&mut lock) {
+    let _x = match lsp_message::read_message(&mut lock) {
         Ok(message) => Some(message),
         Err(err) => {
             println!("{:?}", err);
@@ -214,9 +149,9 @@ fn main() {
         .write_all(full_req.as_bytes())
         .expect("sk sk sk sk");
 
-    let res_json = get_symbol_req_response(&mut lock);
+    let res_json = get_symbol_req_response(&mut lock, 10);
 
-    result_handler::print_results(&res_json, filename, flags, regex);
+    result_handler::print_results(&res_json, filename, flags, regex, rls_stdin, &mut lock);
 }
 
 #[cfg(test)]

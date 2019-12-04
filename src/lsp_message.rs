@@ -1,5 +1,6 @@
-use json::*;
-use std::string::*;
+use json::{JsonValue, object, array};
+use std::io;
+use std::io::BufRead;
 
 struct InitRequest {
     json_message: JsonValue,
@@ -256,6 +257,31 @@ impl SymbolRequest {
     }
 }
 
+struct Hover {
+  json_message: JsonValue,
+}
+
+impl Hover {
+    fn new(document: &str, line: u32, character: u32) -> Hover {
+        Hover {
+            json_message: object! {
+                "id" => 20,
+                "jsonrpc" => 2.0,
+                "method" => "textDocument/hover",
+                "params" => object!{
+                  "textDocument" => object!{
+                    "uri" => document
+                    },
+                  "position" => object!{
+                    "line" => line,
+                    "character" => character
+                  }
+                }
+            },
+        }
+    }  
+}
+
 fn get_pid() -> u32 {
     // get parent pid for transaction
     std::process::id()
@@ -303,4 +329,75 @@ pub fn init_notification() -> String {
 
 pub fn symbol_request(symbol_name: &str) -> String {
     get_formatted_message_str(&SymbolRequest::new(symbol_name).json_message)
+}
+
+pub fn hover(document: &str, line: u32, character: u32) -> String {
+  get_formatted_message_str(&Hover::new(document, line, character).json_message)
+}
+
+pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
+    // Read in the "Content-Length: xx" part.
+    let mut size: Option<usize> = None;
+    loop {
+        let mut buffer = String::new();
+        input.read_line(&mut buffer);
+
+        // End of input.
+        if buffer.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "EOF encountered in the middle of reading LSP headers",
+            ));
+        }
+
+        // Header section is finished, break from the loop.
+        if buffer == "\r\n" {
+            break;
+        }
+
+        let res: Vec<&str> = buffer.split(' ').collect();
+
+        // Make sure header is valid.
+        if res.len() != 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Header '{}' is malformed", buffer),
+            ));
+        }
+        let header_name = res[0].to_lowercase();
+        let header_value = res[1].trim();
+
+        match header_name.as_ref() {
+            "content-length:" => {
+                size = Some(usize::from_str_radix(header_value, 10).map_err(|_e| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Couldn't read size")
+                })?);
+            }
+            "content-type:" => {
+                if header_value != "utf8" && header_value != "utf-8" {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Content type '{}' is invalid", header_value),
+                    ));
+                }
+            }
+            // Ignore unknown headers (specification doesn't say what to do in this case).
+            _ => (),
+        }
+    }
+    let size = match size {
+        Some(size) => size,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Message is missing 'content-length' header",
+            ));
+        }
+    };
+    //println!("reading: {:?} bytes", size);
+
+    let mut content = vec![0; size];
+    input.read_exact(&mut content)?;
+
+    String::from_utf8(content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
