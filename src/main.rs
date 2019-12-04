@@ -7,7 +7,7 @@ use clap::App;
 mod lsp_message;
 mod result_handler;
 use std::io;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::process::{Command, Stdio};
 use std::{thread, time};
 
@@ -23,8 +23,6 @@ fn run_server() -> Result<std::process::Child, io::Error> {
     };
     Ok(instance)
 }
-
-
 
 // use enum for flags instead?
 fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
@@ -76,9 +74,12 @@ fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
     return flags;
 }
 
-fn get_symbol_req_response(reader: &mut BufReader<std::process::ChildStdout>, id: u32) -> json::JsonValue {
-  let mut res: String;
-  let check_str = format!("\"id\":{}", id); 
+fn get_symbol_req_response(
+    reader: &mut BufReader<std::process::ChildStdout>,
+    id: u32,
+) -> json::JsonValue {
+    let mut res: String;
+    let check_str = format!("\"id\":{}", id);
     loop {
         let y = match lsp_message::read_message(reader) {
             Ok(message) => Some(message),

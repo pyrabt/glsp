@@ -1,8 +1,7 @@
-use colored::*;
 use crate::lsp_message;
+use colored::*;
 use json::JsonValue;
-use std::io::{Write, BufReader};
-
+use std::io::{BufReader, Write};
 
 struct LspResult {
     name: String,
@@ -18,6 +17,26 @@ impl LspResult {
             location: location,
             line_num: line,
             kind: kind,
+        }
+    }
+}
+
+struct ResultJson {
+    name: String,
+    kind_int: u32,
+    location: String,
+    line: u32,
+    character: u32,
+}
+
+impl ResultJson {
+    fn new(name: String, kind: u32, location: String, line: u32, character: u32) -> ResultJson {
+        ResultJson {
+            name: name,
+            location: location,
+            line: line,
+            kind_int: kind,
+            character: character,
         }
     }
 }
@@ -54,9 +73,12 @@ fn get_symbol_type(kind: u32) -> String {
     }
 }
 
-fn get_hover_req_response(reader: &mut BufReader<std::process::ChildStdout>, id: u32) -> json::JsonValue {
-  let mut res: String;
-  let check_str = format!("\"id\":{}", id); 
+fn get_hover_req_response(
+    reader: &mut BufReader<std::process::ChildStdout>,
+    id: u32,
+) -> json::JsonValue {
+    let mut res: String;
+    let check_str = format!("\"id\":{}", id);
     loop {
         let y = match lsp_message::read_message(reader) {
             Ok(message) => Some(message),
@@ -87,7 +109,7 @@ fn get_response_array_length(json: &JsonValue) -> u64 {
     return ret_len as u64;
 }
 
-fn read_result(json: &JsonValue, index: u64, rls_stdin: &mut std::process::ChildStdin, lock: &mut BufReader<std::process::ChildStdout>) -> LspResult {
+fn get_parsed_result_json(json: &JsonValue, index: u64) -> ResultJson {
     let name = json["result"][index as usize]["name"].to_string();
     let ret_type = &json["result"][index as usize]["kind"];
     let type_int: u32 = ret_type.dump().parse::<u32>().unwrap();
@@ -99,26 +121,56 @@ fn read_result(json: &JsonValue, index: u64, rls_stdin: &mut std::process::Child
         json["result"][index as usize]["location"]["range"]["start"]["character"].to_string();
     let char_num = char_num_str.parse::<u32>().unwrap();
 
+    ResultJson::new(name, type_int, location, line_num, char_num)
+}
+
+fn read_result(
+    json: &JsonValue,
+    index: u64,
+    rls_stdin: &mut std::process::ChildStdin,
+    lock: &mut BufReader<std::process::ChildStdout>,
+) -> LspResult {
+    let parsed_json = get_parsed_result_json(json, index);
     let data_type: String;
-    if get_symbol_type(type_int) == "Variable" {
-       let request = lsp_message::hover(&location.to_string(), line_num, char_num);
-        rls_stdin.write_all(request.as_bytes());
+    if get_symbol_type(parsed_json.kind_int) == "Variable" {
+        let request = lsp_message::hover(
+            &parsed_json.location,
+            parsed_json.line,
+            parsed_json.character,
+        );
+        rls_stdin
+            .write_all(request.as_bytes())
+            .expect("There was an error sending a message to RLS");
         let result = get_hover_req_response(lock, 20);
         data_type = result["result"]["contents"][0]["value"].to_string();
     } else {
-        data_type = get_symbol_type(type_int);
+        data_type = get_symbol_type(parsed_json.kind_int);
     }
 
-    return LspResult::new(name, data_type, location, line_num);
+    return LspResult::new(
+        parsed_json.name,
+        data_type,
+        parsed_json.location,
+        parsed_json.line,
+    );
 }
 
-pub fn print_results(json: &JsonValue, filename: String, flags: Vec<String>, regex: &str, rls_stdin: &mut std::process::ChildStdin, lock: &mut BufReader<std::process::ChildStdout>) {
+pub fn print_results(
+    json: &JsonValue,
+    filename: String,
+    flags: Vec<String>,
+    regex: &str,
+    rls_stdin: &mut std::process::ChildStdin,
+    lock: &mut BufReader<std::process::ChildStdout>,
+) {
     let max_index = get_response_array_length(json);
     print_heading();
 
     for i in 0..max_index {
         let location: String = json["result"][i as usize]["location"]["uri"].to_string();
-        if location.contains(".rustup") || location.contains(".cargo") {continue;}
+        if location.contains(".rustup") || location.contains(".cargo") {
+            continue;
+        }
 
         let query_res = read_result(json, i, rls_stdin, lock);
 
@@ -145,7 +197,7 @@ pub fn print_results(json: &JsonValue, filename: String, flags: Vec<String>, reg
 // ------------------- UNIT TESTS --------------------
 
 #[cfg(test)]
-mod main_tests {
+mod result_handler_tests {
 
     use super::*;
 

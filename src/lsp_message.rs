@@ -1,6 +1,11 @@
-use json::{JsonValue, object, array};
+use json::{array, object, JsonValue};
 use std::io;
 use std::io::BufRead;
+
+const INIT_REQUEST_ID: u32 = 0;
+const INIT_NOTIFY_ID: u32 = 1;
+const SYMBOL_REQUEST_ID: u32 = 10;
+const HOVER_REQUEST_ID: u32 = 20;
 
 struct InitRequest {
     json_message: JsonValue,
@@ -10,7 +15,7 @@ impl InitRequest {
     fn new() -> InitRequest {
         InitRequest {
             json_message: object! {
-                "id" => 0,
+                "id" => INIT_REQUEST_ID,
                 "jsonrpc" => 2.0,
                 "method" => "initialize",
                 "params" => object!{
@@ -229,7 +234,7 @@ impl InitNotify {
     fn new() -> InitNotify {
         InitNotify {
             json_message: object! {
-                "id" => 2,
+                "id" => INIT_NOTIFY_ID,
                 "jsonrpc" => 2.0,
                 "method" => "initialized",
                 "params" => object!{}
@@ -246,7 +251,7 @@ impl SymbolRequest {
     fn new(symbol_name: &str) -> SymbolRequest {
         SymbolRequest {
             json_message: object! {
-                "id" => 10,
+                "id" => SYMBOL_REQUEST_ID,
                 "jsonrpc" => 2.0,
                 "method" => "workspace/symbol",
                 "params" => object!{
@@ -258,14 +263,14 @@ impl SymbolRequest {
 }
 
 struct Hover {
-  json_message: JsonValue,
+    json_message: JsonValue,
 }
 
 impl Hover {
     fn new(document: &str, line: u32, character: u32) -> Hover {
         Hover {
             json_message: object! {
-                "id" => 20,
+                "id" => HOVER_REQUEST_ID,
                 "jsonrpc" => 2.0,
                 "method" => "textDocument/hover",
                 "params" => object!{
@@ -279,7 +284,7 @@ impl Hover {
                 }
             },
         }
-    }  
+    }
 }
 
 fn get_pid() -> u32 {
@@ -332,7 +337,7 @@ pub fn symbol_request(symbol_name: &str) -> String {
 }
 
 pub fn hover(document: &str, line: u32, character: u32) -> String {
-  get_formatted_message_str(&Hover::new(document, line, character).json_message)
+    get_formatted_message_str(&Hover::new(document, line, character).json_message)
 }
 
 pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
@@ -340,7 +345,7 @@ pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
     let mut size: Option<usize> = None;
     loop {
         let mut buffer = String::new();
-        input.read_line(&mut buffer);
+        input.read_line(&mut buffer).expect("Error parsing message");
 
         // End of input.
         if buffer.is_empty() {
@@ -400,4 +405,78 @@ pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
     input.read_exact(&mut content)?;
 
     String::from_utf8(content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
+
+#[cfg(test)]
+mod lsp_message_tests {
+
+    use super::*;
+
+    #[test]
+    fn init_req_id_is_0() {
+        assert_eq!(0, INIT_REQUEST_ID);
+    }
+
+    #[test]
+    fn init_req_has_proper_id() {
+        let init_req_json = init_request();
+        assert!(init_req_json.contains("\"id\":0"));
+    }
+
+    #[test]
+    fn init_notification_id_is_1() {
+        assert_eq!(1, INIT_NOTIFY_ID);
+    }
+
+    #[test]
+    fn init_notification_has_proper_id() {
+        let init_notify_json = init_notification();
+        assert!(init_notify_json.contains("\"id\":1"));
+    }
+
+    #[test]
+    fn symbol_req_id_is_10() {
+        assert_eq!(10, SYMBOL_REQUEST_ID);
+    }
+
+    #[test]
+    fn symbol_req_has_proper_id() {
+        let symbol_req_json = symbol_request("fooBar");
+        assert!(symbol_req_json.contains("\"id\":10"));
+    }
+
+    #[test]
+    fn symbol_req_has_passed_symbol() {
+        let symbol_req_json = symbol_request("fooBar");
+        assert!(symbol_req_json.contains("\"query\":\"fooBar\""));
+    }
+
+    #[test]
+    fn hover_req_id_is_20() {
+        assert_eq!(20, HOVER_REQUEST_ID);
+    }
+
+    #[test]
+    fn hover_req_has_proper_id() {
+        let hover_json = hover("foobar.rs", 420, 69);
+        assert!(hover_json.contains("\"id\":20"));
+    }
+
+    #[test]
+    fn hover_req_has_passed_document_path() {
+        let hover_json = hover("foobar.rs", 420, 69);
+        assert!(hover_json.contains("\"uri\":\"foobar.rs\""));
+    }
+
+    #[test]
+    fn hover_req_has_passed_line_num() {
+        let hover_json = hover("fooBar.rs", 420, 69);
+        assert!(hover_json.contains("\"line\":420"));
+    }
+
+    #[test]
+    fn hover_is_has_passed_character_num() {
+        let hover_json = hover("fooBar.rs", 420, 69);
+        assert!(hover_json.contains("\"character\":69"));
+    }
 }
