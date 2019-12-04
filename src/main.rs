@@ -9,7 +9,6 @@ mod result_handler;
 use std::io;
 use std::io::{BufReader, Write};
 use std::process::{Command, Stdio};
-use std::{thread, time};
 
 fn run_server() -> Result<std::process::Child, io::Error> {
     let instance = match Command::new("rls")
@@ -24,7 +23,6 @@ fn run_server() -> Result<std::process::Child, io::Error> {
     Ok(instance)
 }
 
-// use enum for flags instead?
 fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
     let mut flags: Vec<String> = Vec::new();
 
@@ -94,6 +92,42 @@ fn get_symbol_req_response(
     return json::parse(&res).unwrap();
 }
 
+fn get_filename_flag(matches: &clap::ArgMatches) -> String {
+    if matches.is_present("file") {
+        return matches
+            .value_of("file")
+            .expect("There was an error fetching the filename flag")
+            .to_string();
+    }
+
+    return "".to_string();
+}
+
+fn notify_initialized(rls_stdin: &mut std::process::ChildStdin) {
+    let full_notify_msg = lsp_message::init_notification();
+    rls_stdin
+        .write_all(full_notify_msg.as_bytes())
+        .expect("AND I OOP");
+}
+
+fn get_symbol_response_or_timeout(regex: &str, rls_stdin: &mut std::process::ChildStdin, lock: &mut BufReader<std::process::ChildStdout>) -> json::JsonValue {
+    // I can't find anything in the docs to explain why the server will give empty results on valid requests
+    // Have to do this dumb shit for now
+    let full_req = lsp_message::symbol_request(regex);
+    let mut res_json: json::JsonValue = json::JsonValue::Null;
+    for _ in 0..95000 {
+        rls_stdin
+            .write_all(full_req.as_bytes())
+            .expect("sk sk sk sk");
+        res_json = get_symbol_req_response(lock, 10);
+        if !res_json.to_string().contains("\"result\":[]}") {
+            break;
+        }
+    }
+
+    res_json
+}
+
 fn main() {
     // The YAML file is found relative to the current file, similar to how modules are found
     let yaml = load_yaml!("cli.yml");
@@ -102,11 +136,8 @@ fn main() {
     // get the passed symbol we're looking for
     let regex = matches.value_of("regex").unwrap();
 
-    let mut filename: String = "".to_string();
-
-    if matches.is_present("file") {
-        filename = matches.value_of("file").unwrap().to_string();
-    }
+    // Check for filename flag input
+    let filename = get_filename_flag(&matches);
 
     // flags
     let flags = get_flags(&matches);
@@ -123,36 +154,13 @@ fn main() {
         .write_all(&full_msg.as_bytes())
         .expect("Error writing json dump to stdin");
 
-    let mut lock = BufReader::new(rls_stdout.take().unwrap());
+    let mut rls_stdout_reader = BufReader::new(rls_stdout.take().unwrap());
 
-    let _x = match lsp_message::read_message(&mut lock) {
-        Ok(message) => Some(message),
-        Err(err) => {
-            println!("{:?}", err);
-            None
-        }
-    };
+    notify_initialized(rls_stdin);
 
-    // put it all together as a string
-    let full_notify_msg = lsp_message::init_notification();
+    let res_json = get_symbol_response_or_timeout(regex, rls_stdin, &mut rls_stdout_reader);
 
-    let full_req = lsp_message::symbol_request(regex);
-
-    // I guess I need to wait for the server to fully start up after notification
-    let ten_millis = time::Duration::from_millis(1400);
-
-    rls_stdin
-        .write_all(full_notify_msg.as_bytes())
-        .expect("AND I OOP");
-
-    thread::sleep(ten_millis);
-    rls_stdin
-        .write_all(full_req.as_bytes())
-        .expect("sk sk sk sk");
-
-    let res_json = get_symbol_req_response(&mut lock, 10);
-
-    result_handler::print_results(&res_json, filename, flags, regex, rls_stdin, &mut lock);
+    result_handler::print_results(&res_json, filename, flags, regex, rls_stdin, &mut rls_stdout_reader);
 }
 
 #[cfg(test)]

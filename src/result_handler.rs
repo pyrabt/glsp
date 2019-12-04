@@ -164,6 +164,7 @@ pub fn print_results(
     lock: &mut BufReader<std::process::ChildStdout>,
 ) {
     let max_index = get_response_array_length(json);
+    println!("{}", json);
     print_heading();
 
     for i in 0..max_index {

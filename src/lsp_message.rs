@@ -399,7 +399,6 @@ pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
             ));
         }
     };
-    //println!("reading: {:?} bytes", size);
 
     let mut content = vec![0; size];
     input.read_exact(&mut content)?;
