@@ -76,11 +76,10 @@ fn get_symbol_type(kind: u32) -> String {
 }
 
 fn get_hover_req_response(
-    reader: &mut BufReader<std::process::ChildStdout>,
-    id: u32,
+    reader: &mut BufReader<std::process::ChildStdout>
 ) -> json::JsonValue {
     let mut res: String;
-    let check_str = format!("\"id\":{}", id);
+    let check_str = format!("\"id\":{}", lsp_message::HOVER_REQUEST_ID);
     loop {
         let y = match lsp_message::read_message(reader) {
             Ok(message) => Some(message),
@@ -149,7 +148,7 @@ fn read_result(
         rls_stdin
             .write_all(request.as_bytes())
             .expect("There was an error sending a message to RLS");
-        let result = get_hover_req_response(lock, 20);
+        let result = get_hover_req_response(lock);
         data_type = result["result"]["contents"][0]["value"].to_string();
     } else {
         data_type = get_symbol_type(parsed_json.kind_int);

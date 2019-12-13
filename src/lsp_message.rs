@@ -2,10 +2,10 @@ use json::{array, object, JsonValue};
 use std::io;
 use std::io::BufRead;
 
-const INIT_REQUEST_ID: u32 = 0;
-const INIT_NOTIFY_ID: u32 = 1;
-const SYMBOL_REQUEST_ID: u32 = 10;
-const HOVER_REQUEST_ID: u32 = 20;
+pub const INIT_REQUEST_ID: u32 = 0;
+pub const INIT_NOTIFY_ID: u32 = 1;
+pub const SYMBOL_REQUEST_ID: u32 = 10;
+pub const HOVER_REQUEST_ID: u32 = 20;
 
 struct InitRequest {
     json_message: JsonValue,
@@ -345,7 +345,7 @@ fn get_message_content_size<R: BufRead>(input: &mut R) -> Result<usize, io::Erro
     let mut content_size: Option<usize> = None;
     loop {
         let mut buffer = String::new();
-        input.read_line(&mut buffer).expect("Error parsing message");
+        input.read_line(&mut buffer).expect("Error parsing message"); 
 
         // End of input.
         if buffer.is_empty() {
@@ -389,7 +389,12 @@ fn get_message_content_size<R: BufRead>(input: &mut R) -> Result<usize, io::Erro
                 })?);
             }
             // throw an error on unknown header field (This would indicate the reading is off by a line)
-            _ => (),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("{} not a valid header.", header_value),
+                ))
+            }
         }
     }
 }

@@ -74,10 +74,9 @@ fn get_flags(matches: &clap::ArgMatches) -> Vec<String> {
 
 fn get_symbol_req_response(
     reader: &mut BufReader<std::process::ChildStdout>,
-    id: u32,
 ) -> json::JsonValue {
     let mut res: String;
-    let check_str = format!("\"id\":{}", id);
+    let check_str = format!("\"id\":{}", lsp_message::SYMBOL_REQUEST_ID);
     loop {
         let y = match lsp_message::read_message(reader) {
             Ok(message) => Some(message),
@@ -107,7 +106,7 @@ fn notify_initialized(rls_stdin: &mut std::process::ChildStdin) {
     let full_notify_msg = lsp_message::init_notification();
     rls_stdin
         .write_all(full_notify_msg.as_bytes())
-        .expect("AND I OOP");
+        .expect("Unable to write to RLS child process");
 }
 
 fn get_symbol_response_or_timeout(
@@ -117,11 +116,11 @@ fn get_symbol_response_or_timeout(
 ) -> json::JsonValue {
     let full_req = lsp_message::symbol_request(regex);
     let mut res_json: json::JsonValue = json::JsonValue::Null;
-    loop {
+    for _ in 0..40000 {
         rls_stdin
             .write_all(full_req.as_bytes())
-            .expect("sk sk sk sk");
-        res_json = get_symbol_req_response(lock, 10);
+            .expect("Unable to write to RLS child process");
+        res_json = get_symbol_req_response(lock);
         if !res_json.to_string().contains("\"result\":[]}") {
             break;
         }
