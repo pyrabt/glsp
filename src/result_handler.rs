@@ -8,15 +8,17 @@ struct LspResult {
     line_num: u32,
     location: String,
     kind: String,
+    data_type: String,
 }
 
 impl LspResult {
-    fn new(name: String, kind: String, location: String, line: u32) -> LspResult {
+    fn new(name: String, kind: String, location: String, line: u32, d_type: String) -> LspResult {
         LspResult {
             name: name,
             location: location,
             line_num: line,
             kind: kind,
+            data_type: d_type,
         }
     }
 }
@@ -93,14 +95,19 @@ fn get_hover_req_response(
     return json::parse(&res).unwrap();
 }
 
-fn print_heading() {
-    println!(
-        "| {0: <15} | {1: <20} | {2: <10} | {3: <10}",
+fn get_heading_str() -> String {
+    format!(
+        "| {0: <25} | {1: <20} | {2: <10} | {3: <10}",
         "Name".green().bold(),
         "Type".green().bold(),
         "Line".green().bold(),
         "Location".green().bold()
-    );
+    )
+}
+
+fn print_heading() {
+    let heading = get_heading_str();
+    println!("{}", heading);
 }
 
 fn get_response_array_length(json: &JsonValue) -> u64 {
@@ -132,7 +139,8 @@ fn read_result(
 ) -> LspResult {
     let parsed_json = get_parsed_result_json(json, index);
     let data_type: String;
-    if get_symbol_type(parsed_json.kind_int) == "Variable" {
+    let kind = get_symbol_type(parsed_json.kind_int);
+    if kind == "Variable" {
         let request = lsp_message::hover(
             &parsed_json.location,
             parsed_json.line,
@@ -149,9 +157,10 @@ fn read_result(
 
     return LspResult::new(
         parsed_json.name,
-        data_type,
+        kind,
         parsed_json.location,
         parsed_json.line,
+        data_type,
     );
 }
 
@@ -164,19 +173,21 @@ pub fn print_results(
     lock: &mut BufReader<std::process::ChildStdout>,
 ) {
     let max_index = get_response_array_length(json);
-    println!("{}", json);
     print_heading();
 
+    // loop through each result in the array
     for i in 0..max_index {
         let location: String = json["result"][i as usize]["location"]["uri"].to_string();
+
+        // Skip standard lib files
         if location.contains(".rustup") || location.contains(".cargo") {
             continue;
         }
 
         let query_res = read_result(json, i, rls_stdin, lock);
 
+        // flag + optional checks
         let matches_optional_file = filename == "" || query_res.location.contains(&filename);
-
         let toolchain =
             query_res.location.contains(".rustup") || query_res.location.contains(".cargo");
 
@@ -186,9 +197,16 @@ pub fn print_results(
             && !toolchain
         {
             if matches_optional_file && query_res.name.contains(regex) {
+                let mut name = query_res.name.clone();
+                if name.len() > 25 {
+                    name.truncate(25);
+                }
                 println!(
-                    "| {0: <15} | {1: <20} | {2: <10} | {3: <10}",
-                    query_res.name, query_res.kind, query_res.line_num, query_res.location
+                    "| {0: <25} | {1: <20} | {2: <10} | {3: <10}",
+                    name,
+                    query_res.data_type,
+                    query_res.line_num,
+                    query_res.location.replace("file://", "")
                 );
             }
         }
@@ -201,9 +219,65 @@ pub fn print_results(
 mod result_handler_tests {
 
     use super::*;
+    use json::*;
 
     #[test]
     fn get_symbol_type_returns_unknown() {
         assert_eq!("Unknown", get_symbol_type(99));
+    }
+
+    #[test]
+    fn heading_is_properly_formatted() {
+        let heading = get_heading_str();
+        assert!(heading.contains("Name"));
+        assert!(heading.contains("Type"));
+        assert!(heading.contains("Line"));
+        assert!(heading.contains("Location"));
+    }
+
+    #[test]
+    fn get_response_array_length_returns_correct_length() {
+        let test_msg = object! {
+            "result" => array!{
+                0,
+                1,
+                2,
+                3,
+                4
+            }
+        };
+
+        let result_len = get_response_array_length(&test_msg);
+
+        assert!(result_len == 5);
+    }
+
+    #[test]
+    fn response_properly_parsed_to_Result_Json() {
+        let test_msg = object! {
+            "result" => array!{
+                object! {
+                    "name" => "test",
+                    "kind" => 69,
+                    "location" => object! {
+                        "uri" => "FooBar.rs",
+                        "range" => object! {
+                        "start" => object!{
+                            "line" => 420,
+                            "character" => 22,
+                        },
+                    }
+                    },
+                }
+            }
+        };
+
+        let result_json = get_parsed_result_json(&test_msg, 0);
+
+        assert!(result_json.name == "test");
+        assert!(result_json.kind_int == 69);
+        assert!(result_json.location == "FooBar.rs");
+        assert!(result_json.line == 420);
+        assert!(result_json.character == 22);
     }
 }

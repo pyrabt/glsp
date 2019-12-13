@@ -110,12 +110,14 @@ fn notify_initialized(rls_stdin: &mut std::process::ChildStdin) {
         .expect("AND I OOP");
 }
 
-fn get_symbol_response_or_timeout(regex: &str, rls_stdin: &mut std::process::ChildStdin, lock: &mut BufReader<std::process::ChildStdout>) -> json::JsonValue {
-    // I can't find anything in the docs to explain why the server will give empty results on valid requests
-    // Have to do this dumb shit for now
+fn get_symbol_response_or_timeout(
+    regex: &str,
+    rls_stdin: &mut std::process::ChildStdin,
+    lock: &mut BufReader<std::process::ChildStdout>,
+) -> json::JsonValue {
     let full_req = lsp_message::symbol_request(regex);
     let mut res_json: json::JsonValue = json::JsonValue::Null;
-    for _ in 0..95000 {
+    loop {
         rls_stdin
             .write_all(full_req.as_bytes())
             .expect("sk sk sk sk");
@@ -146,6 +148,7 @@ fn main() {
     let mut server_instance = run_server().expect("Unable to start Rust Lang Server");
     let rls_stdin = server_instance.stdin.as_mut().unwrap();
     let mut rls_stdout = server_instance.stdout;
+    let mut rls_stdout_reader = BufReader::new(rls_stdout.take().unwrap());
 
     // get init request string
     let full_msg = lsp_message::init_request();
@@ -154,13 +157,18 @@ fn main() {
         .write_all(&full_msg.as_bytes())
         .expect("Error writing json dump to stdin");
 
-    let mut rls_stdout_reader = BufReader::new(rls_stdout.take().unwrap());
-
     notify_initialized(rls_stdin);
 
     let res_json = get_symbol_response_or_timeout(regex, rls_stdin, &mut rls_stdout_reader);
 
-    result_handler::print_results(&res_json, filename, flags, regex, rls_stdin, &mut rls_stdout_reader);
+    result_handler::print_results(
+        &res_json,
+        filename,
+        flags,
+        regex,
+        rls_stdin,
+        &mut rls_stdout_reader,
+    );
 }
 
 #[cfg(test)]

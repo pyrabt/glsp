@@ -340,9 +340,9 @@ pub fn hover(document: &str, line: u32, character: u32) -> String {
     get_formatted_message_str(&Hover::new(document, line, character).json_message)
 }
 
-pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
+fn get_message_content_size<R: BufRead>(input: &mut R) -> Result<usize, io::Error> {
     // Read in the "Content-Length: xx" part.
-    let mut size: Option<usize> = None;
+    let mut content_size: Option<usize> = None;
     loop {
         let mut buffer = String::new();
         input.read_line(&mut buffer).expect("Error parsing message");
@@ -355,53 +355,50 @@ pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
             ));
         }
 
-        // Header section is finished, break from the loop.
+        // Header section is finished, return the matched value for the content size.
         if buffer == "\r\n" {
-            break;
+            match content_size {
+                Some(size) => return Ok(size),
+                None => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Message is missing 'content-length' header",
+                    ));
+                }
+            };
         }
 
         let res: Vec<&str> = buffer.split(' ').collect();
 
-        // Make sure header is valid.
+        // Make sure header is properly formatted
         if res.len() != 2 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Header '{}' is malformed", buffer),
             ));
         }
+
         let header_name = res[0].to_lowercase();
         let header_value = res[1].trim();
 
+        // Get the size from the content length field
         match header_name.as_ref() {
             "content-length:" => {
-                size = Some(usize::from_str_radix(header_value, 10).map_err(|_e| {
+                content_size = Some(usize::from_str_radix(header_value, 10).map_err(|_e| {
                     io::Error::new(io::ErrorKind::InvalidData, "Couldn't read size")
                 })?);
             }
-            "content-type:" => {
-                if header_value != "utf8" && header_value != "utf-8" {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Content type '{}' is invalid", header_value),
-                    ));
-                }
-            }
-            // Ignore unknown headers (specification doesn't say what to do in this case).
+            // throw an error on unknown header field (This would indicate the reading is off by a line)
             _ => (),
         }
     }
-    let size = match size {
-        Some(size) => size,
-        None => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Message is missing 'content-length' header",
-            ));
-        }
-    };
+}
 
-    let mut content = vec![0; size];
-    input.read_exact(&mut content)?;
+pub fn read_message<R: BufRead>(input: &mut R) -> Result<String, io::Error> {
+    let content_size = get_message_content_size(input).unwrap();
+
+    let mut content = vec![0; content_size]; // Initialize the message array size
+    input.read_exact(&mut content)?; // Read the exact number of bytes from the input stream into the array
 
     String::from_utf8(content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
